@@ -1,18 +1,32 @@
 # Noosphere 🌐
 
-> *Your research sessions, transformed into a queryable knowledge network.*
+> *An open library of human research — collectively built, semantically searchable.*
 
 **Live:** [nooshpere-w4gu.vercel.app](https://nooshpere-w4gu.vercel.app/)
 
-Noosphere turns your [Perplexity](https://perplexity.ai) research conversations into a structured, semantically searchable knowledge graph. Paste a prompt at the end of any session, ingest the structured JSON output, and then query across everything you've ever researched — with synthesised answers grounded only in your own knowledge, not the open internet. Built in 48 hours at the **AIGIxZo Build Sprint #1** at Zo House Bangalore.
+Noosphere is a **shared, open knowledge repository** of AI-assisted research sessions. Anyone can contribute their research — paste a prompt at the end of any [Perplexity](https://perplexity.ai) session, ingest the structured JSON output, and add it to the collective graph. As the library grows, queries return synthesised answers grounded in the **accumulated knowledge of all contributors** — not the open internet, not a single user's notes. Built in 48 hours at the **AIGIxZo Build Sprint #1** at Zo House Bangalore.
+
+The name comes from Vladimir Vernadsky's concept of the *noosphere* — the sphere of human thought and collective intelligence that emerges from, and transcends, individual minds.
+
+---
+
+## The Idea
+
+Most research is ephemeral. You spend an hour deep in a topic with an AI assistant, synthesise something useful, then that knowledge dissolves when the tab closes. Noosphere is built on a different premise:
+
+**What if every research session you ran could be preserved, indexed, and made queryable by everyone?**
+
+The more people contribute, the richer the corpus. A junior engineer researching distributed systems, a researcher exploring climate models, a founder mapping a new market — each session adds to a growing graph of structured human knowledge. When you query, you're not searching the web. You're querying the distilled research of people who've already done the work.
+
+This is the same flywheel that made Wikipedia, Stack Overflow, and Hugging Face valuable — **the library gets smarter with every contributor.**
 
 ---
 
 ## What It Does
 
-- **Extracts structured knowledge from Perplexity sessions** using a carefully designed prompt that forces Perplexity to output a domain-mapped JSON artifact with core facts, key insights, unresolved tensions, and cross-domain connections.
+- **Extracts structured knowledge from Perplexity sessions** using a designed prompt that forces Perplexity to output a domain-mapped JSON artifact with core facts, key insights, unresolved tensions, and cross-domain connections.
 - **Embeds and indexes** every domain node and high-confidence fact using [Voyage AI](https://www.voyageai.com/) (`voyage-3-lite`, 512-dimensional vectors) stored in Supabase with pgvector.
-- **Lets you query the collective** — ask any question in natural language and get a synthesised answer backed by semantic search across all your sessions, with source attribution and cross-domain connections surfaced.
+- **Lets you query the collective** — ask any question in natural language and get a synthesised answer backed by semantic search across all contributed sessions, with source attribution and cross-domain connections surfaced.
 - **Cleans messy output** — LLM responses often come with citation markers, superscripts, and encoding noise. A `/api/clean` step strips this before ingest.
 
 ---
@@ -33,16 +47,16 @@ Noosphere Web App (Next.js 16)
                        Claude Sonnet 4.6 (synthesis, grounded to retrieved context)
 ```
 
-**Ingest flow:**
-1. User pastes the extraction prompt into their Perplexity session.
+**Ingest flow (contributing your research):**
+1. At the end of any Perplexity session, paste the extraction prompt.
 2. Perplexity outputs a structured JSON artifact (`domain_map`, `high_confidence_facts`, `cross_domain_connections`, etc.).
-3. User pastes the raw JSON into Noosphere → clicks **Clean document** (Claude normalises it).
-4. User clicks **Add to Network** → domains and facts are embedded in batch by Voyage AI and stored in Supabase with their vector embeddings.
+3. Paste the raw JSON into Noosphere → click **Clean document** (Claude normalises it).
+4. Click **Add to Network** → domains and facts are embedded in batch by Voyage AI and stored in Supabase with their vector embeddings, joining the shared corpus.
 
-**Query flow:**
-1. User types a question on the Query page.
+**Query flow (asking the library):**
+1. Type a question on the Query page.
 2. Query is embedded by Voyage AI.
-3. Supabase runs `search_domains` and `search_facts` RPC functions (IVFFlat cosine index) in parallel, returning the top 5 domain nodes and top 8 facts.
+3. Supabase runs `search_domains` and `search_facts` RPC functions (IVFFlat cosine index) in parallel, returning the top 5 domain nodes and top 8 facts from **all contributed sessions**.
 4. Relevant cross-domain connections for the matched domains are fetched.
 5. Everything is bundled into a structured prompt for Claude Sonnet 4.6, which synthesises a grounded answer.
 6. The UI shows: an answer, matched domain cards with similarity scores, and cross-domain connection threads.
@@ -172,17 +186,20 @@ Vector search uses **cosine similarity** via IVFFlat indexes (`lists=10`). The `
 
 ## Design Decisions
 
+**Why an open, shared corpus instead of personal notes?**  
+The value of Noosphere scales with contributors. A personal knowledge base is only as good as one person's research. An open library is as good as everyone's combined research — and gets exponentially better as more sessions are added. This is the Wikipedia/Stack Overflow model applied to AI-assisted research.
+
+**Why structured extraction instead of raw session dumps?**  
+Perplexity sessions are verbose and repetitive. The extraction prompt forces the model to distill only the durable knowledge — precise facts, non-obvious insights, unresolved tensions — while discarding conversational scaffolding. This makes the vector index dense and high-signal rather than noisy. It also ensures that knowledge from different contributors on overlapping topics is structurally compatible.
+
 **Why Voyage AI instead of OpenAI embeddings?**  
 `voyage-3-lite` produces dense 512-dimensional embeddings suited for technical/research content at lower cost than OpenAI Ada-002, and Voyage's retrieval quality on domain-specific technical documents is competitive.
 
-**Why structured extraction instead of raw session dumps?**  
-Perplexity sessions are verbose and repetitive. The extraction prompt forces the model to distill only the durable knowledge — precise facts, non-obvious insights, unresolved tensions — while discarding conversational scaffolding. This makes the vector index dense and high-signal rather than noisy.
-
 **Why a two-step clean → ingest flow?**  
-Perplexity embeds citation markers (`[1][2]`) and sometimes produces malformed JSON at context limits. The clean step uses Claude to strip noise and validate structure before ingest, preventing garbage from polluting the index.
+Perplexity embeds citation markers (`[1][2]`) and sometimes produces malformed JSON at context limits. The clean step uses Claude to strip noise and validate structure before ingest, preventing garbage from polluting the shared index.
 
 **Why Claude Sonnet 4.6 for synthesis?**  
-The query prompt explicitly instructs Claude to answer only from retrieved context, cite domains, present conflicting positions, and avoid hallucination. Sonnet's instruction-following is reliable enough that the grounding constraint holds in practice. Haiku would be faster, but Sonnet produces more careful synthesis when multiple domain matches conflict.
+The query prompt explicitly instructs Claude to answer only from retrieved context, cite domains, present conflicting positions, and avoid hallucination. Sonnet's instruction-following is reliable enough that the grounding constraint holds in practice — ensuring answers reflect what contributors actually researched, not what the model was trained on.
 
 ---
 
@@ -191,8 +208,8 @@ The query prompt explicitly instructs Claude to answer only from retrieved conte
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/clean` | POST `{ raw: string }` | Strips citation noise, returns valid pretty-printed JSON |
-| `/api/ingest` | POST `{ ...artifact }` | Embeds + stores artifact; returns counts of indexed items |
-| `/api/query` | GET `?q=<query>` | Semantic search + Claude synthesis; returns answer + metadata |
+| `/api/ingest` | POST `{ ...artifact }` | Embeds + stores artifact in the shared corpus; returns counts of indexed items |
+| `/api/query` | GET `?q=<query>` | Semantic search across all sessions + Claude synthesis; returns answer + metadata |
 | `/api/artifacts` | GET | List all artifact stubs (id, created_at, confidence, source_domains) |
 | `/api/artifacts` | DELETE `{ id }` | Remove an artifact and all its nodes/facts (cascade delete) |
 | `/api/domains` | GET | List all domain nodes (for bubble visualisation on query page) |
@@ -202,14 +219,14 @@ The query prompt explicitly instructs Claude to answer only from retrieved conte
 
 ## Pages
 
-### `/` — Ingest
+### `/` — Contribute Research
 - Left panel: the extraction prompt (copy to clipboard with one click).
-- Right panel top: paste JSON, clean it, then add to network. Shows indexed counts on success.
-- Right panel bottom: list of sessions currently in the network, with confidence and source domains. Sessions can be removed individually.
+- Right panel top: paste JSON from your Perplexity session, clean it, then add it to the shared network. Shows indexed counts on success.
+- Right panel bottom: list of all sessions currently in the network, with confidence and source domains. Sessions can be removed individually.
 
-### `/query` — Query the Network
+### `/query` — Query the Library
 - Animated canvas background shows domain nodes as floating bubbles (connected within the same session).
-- Full-text search input → semantic search → synthesised answer.
+- Full-text search input → semantic search across **all contributed sessions** → synthesised answer.
 - Results show: matched domain cards (with similarity % bars), a synthesised answer card, and cross-domain connection threads.
 
 ---
